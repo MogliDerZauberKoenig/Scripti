@@ -18,6 +18,8 @@
                         InterpretLineGroupMe(regexMC)
                     Case "io"
                         InterpretLineGroupIo(regexMC)
+                    Case "var"
+                        InterpretLineGroupVar(regexMC)
                     Case Else
                         Throw New Exception(regexMC(0).Result("Uknown group: $1"))
                 End Select
@@ -44,7 +46,29 @@
             Case "resetcolor"
                 Console.ResetColor()
             Case "write"
-                Console.WriteLine(lineRegEx(0).Result("$3"))
+                Dim out As String = ""
+                Dim pattern As String = "%([^%]+)%"
+                Dim regexMC As Text.RegularExpressions.MatchCollection = Text.RegularExpressions.Regex.Matches(lineRegEx(0).Result("$3"), pattern, Text.RegularExpressions.RegexOptions.IgnoreCase)
+                If regexMC.Count = 0 Then
+                    Console.WriteLine(lineRegEx(0).Result("$3"))
+                Else
+                    out = lineRegEx(0).Result("$3")
+                    For Each m As Text.RegularExpressions.Match In regexMC
+                        For Each c As Text.RegularExpressions.Capture In m.Captures
+                            Dim val As String = c.Value.Replace("%", "")
+                            If strings.ContainsKey(val) Then
+                                out = out.Replace(c.Value, strings(val))
+                            End If
+                            If integers.ContainsKey(val) Then
+                                out = out.Replace(c.Value, integers(val).ToString())
+                            End If
+                            If booleans.ContainsKey(val) Then
+                                out = out.Replace(c.Value, booleans(val).ToString())
+                            End If
+                        Next
+                    Next
+                    Console.WriteLine(out)
+                End If
             Case "exit"
                 exitScript = True
             Case Else
@@ -98,6 +122,72 @@
                 Throw New Exception(lineRegEx(0).Result("Uknown command: $2"))
         End Select
     End Sub
+
+    Sub InterpretLineGroupVar(ByVal lineRegEx As Text.RegularExpressions.MatchCollection)
+        Select Case lineRegEx(0).Result("$2")
+            Case "string"
+                If IsVariableNameInUse(lineRegEx(0).Result("$3")) = False Then
+                    strings.Add(lineRegEx(0).Result("$3"), lineRegEx(0).Result("$4"))
+                Else
+                    If strings.ContainsKey(lineRegEx(0).Result("$3")) Then
+                        strings(lineRegEx(0).Result("$3")) = lineRegEx(0).Result("$4")
+                    Else
+                        Throw New Exception(lineRegEx(0).Result("Variable $3 is already used but not as integer"))
+                    End If
+                End If
+            Case "int"
+                Dim parsed As Integer = 0
+                If IsVariableNameInUse(lineRegEx(0).Result("$3")) = False Then
+                    If Integer.TryParse(lineRegEx(0).Result("$4"), parsed) = True Then
+                        integers.Add(lineRegEx(0).Result("$3"), parsed)
+                    Else
+                        Throw New Exception(lineRegEx(0).Result("Value of variable $3 is not integer: $4"))
+                    End If
+                Else
+                    If integers.ContainsKey(lineRegEx(0).Result("$3")) Then
+                        If Integer.TryParse(lineRegEx(0).Result("$4"), parsed) = True Then
+                            integers(lineRegEx(0).Result("$3")) = parsed
+                        Else
+                            Throw New Exception(lineRegEx(0).Result("Value of variable $3 is not integer: $4"))
+                        End If
+                    Else
+                        Throw New Exception(lineRegEx(0).Result("Variable $3 is already used but not as integer"))
+                    End If
+                End If
+            Case "bool"
+                Dim parsed As Boolean = False
+                If IsVariableNameInUse(lineRegEx(0).Result("$3")) = False Then
+                    If Boolean.TryParse(lineRegEx(0).Result("$4"), parsed) Then
+                        booleans.Add(lineRegEx(0).Result("$3"), parsed)
+                    Else
+                        Throw New Exception(lineRegEx(0).Result("Value of variable $3 is not boolean: $4"))
+                    End If
+                Else
+                    If booleans.ContainsKey(lineRegEx(0).Result("$3")) Then
+                        If Boolean.TryParse(lineRegEx(0).Result("$4"), parsed) = True Then
+                            booleans(lineRegEx(0).Result("$3")) = parsed
+                        Else
+                            Throw New Exception(lineRegEx(0).Result("Value of variable $3 is not boolean: $4"))
+                        End If
+                    Else
+                        Throw New Exception(lineRegEx(0).Result("Variable $3 is already used but not as boolean"))
+                    End If
+                End If
+            Case Else
+                Throw New Exception(lineRegEx(0).Result("Uknown command: $2"))
+        End Select
+    End Sub
+
+    Function IsVariableNameInUse(ByVal name As String) As Boolean
+        If strings.ContainsKey(name) Then
+            Return True
+        ElseIf integers.ContainsKey(name)
+            Return True
+        ElseIf booleans.ContainsKey(name)
+            Return True
+        End If
+        Return False
+    End Function
 
     '''' <summary>
     '''' Interprets a line in the group "template"
